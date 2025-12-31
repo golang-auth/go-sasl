@@ -24,6 +24,7 @@ type EchoPromptType int
 const (
 	EchoPrompt EchoPromptType = iota
 	NoEchoPrompt
+	EchoPromptPassword
 )
 
 type AuthDataSimple struct {
@@ -49,6 +50,10 @@ type SaslSimpleCallback func(authData AuthDataSimple) (string, error)
 type SaslPasswordCallback func(authData AuthDataPassword) (string, error)
 type SaslChallengeCallback func(authData AuthDataChallenge) (string, error)
 type SaslRealmCallback func(authData AuthDataRealm) (string, error)
+
+type Interaction interface {
+	Interact([]Prompt) error
+}
 
 type Prompt struct {
 	DataType PromptDataType

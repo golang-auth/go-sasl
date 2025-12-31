@@ -43,8 +43,27 @@ func (m *externalMech) Step(inToken []byte) (outToken []byte, err error) {
 		return nil, errors.New("anonymous authentication is not allowed")
 	}
 
-	// output token is the requsted authz identity or an empty string
-	outToken = []byte(m.config.ExternalProperties.AuthID)
-	m.isEstablished = true
-	return outToken, nil
+	interact := false
+
+	// the authz is optional.  If we have a callback to find it then use it.
+	if m.config.Callbacks.AuthzIDCallback != nil {
+		authzID, err := m.config.Callbacks.AuthzIDCallback(AuthDataSimple{Prompt: "Enter authorization ID"})
+		switch err {
+		default:
+			return nil, err
+		case nil:
+			// callback might decline to provide an authz ID
+			if authzID != "" {
+				outToken = []byte(authzID)
+			}
+		case ErrInteractionRequired:
+			interact = true
+		}
+	}
+
+	if interact {
+		err = ErrInteractionRequired
+	}
+
+	return
 }

@@ -6,175 +6,440 @@ import (
 	"testing"
 )
 
-func TestNewSaslClient_WithLoggers(t *testing.T) {
+type dummySaslCommonExt struct {
+	saslCommon
+}
+
+func (d *dummySaslCommonExt) getCommon() *saslCommon {
+	return &d.saslCommon
+}
+
+func TestSaslOption_WithLoggers(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
 	loggers := NewTestLoggers(t)
-	client, err := NewSaslClient("imap", WithLoggers(loggers))
+	d := dummySaslCommonExt{}
+	o := WithLoggers(loggers)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.NotNil(client)
-	a.Equal(loggers, client.loggers)
+	a.Equal(loggers, d.loggers)
 }
 
-func TestNewSaslClient_WithServerFQDN(t *testing.T) {
+func TestSaslOption_WithServerFQDN(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithServerFQDN("mail.example.com"))
+	d := dummySaslCommonExt{}
+	o := WithServerFQDN("mail.example.com")
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal("mail.example.com", client.serverFQDN)
+	a.Equal("mail.example.com", d.serverFQDN)
 }
 
-func TestNewSaslClient_WithServerFQDN_Invalid(t *testing.T) {
+func TestSaslOption_WithServerFQDN_Invalid(t *testing.T) {
 	a := NewAssert(t)
-	_, err := NewSaslClient("imap", WithServerFQDN("invalid-.hostname"))
+
+	d := dummySaslCommonExt{}
+	o := WithServerFQDN("invalid-.hostname")
+	err := o(&d)
 	a.Error(err)
 }
 
-func TestNewSaslClient_WithAvailableMechs(t *testing.T) {
+func TestSaslOption_WithAvailableMechs(t *testing.T) {
 	a := NewAssert(t)
-	// Register a test mech first
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithAvailableMechs([]string{"TEST"}))
+	d := dummySaslCommonExt{}
+	o := WithAvailableMechs([]string{"TEST"})
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Contains(client.enabledMechs, "TEST")
+	a.Contains(d.enabledMechs, "TEST")
 }
 
-func TestNewSaslClient_WithAvailableMechs_Unregistered(t *testing.T) {
+func TestSaslOption_WithMinSSF(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	// No mechs registered, so providing unregistered mechs should result in ErrNoMech
-	_, err := NewSaslClient("imap", WithAvailableMechs([]string{"UNREGISTERED"}))
-	a.ErrorIs(err, ErrNoMech)
-}
 
-func TestNewSaslClient_WithAvailableMechs_Mixed(t *testing.T) {
-	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "VALID"})
-
-	client, err := NewSaslClient("imap", WithAvailableMechs([]string{"VALID", "INVALID"}))
+	d := dummySaslCommonExt{}
+	o := WithMinSSF(128)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Contains(client.enabledMechs, "VALID")
-	a.NotContains(client.enabledMechs, "INVALID")
+	a.Equal(SSF(128), d.securityProperties.MinSSF)
 }
 
-func TestNewSaslClient_WithMinSSF(t *testing.T) {
+func TestSaslOption_WithMaxSSF(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithMinSSF(128))
+	d := dummySaslCommonExt{}
+	o := WithMaxSSF(256)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal(SSF(128), client.securityProperties.MinSSF)
+	a.Equal(SSF(256), d.securityProperties.MaxSSF)
 }
 
-func TestNewSaslClient_WithMaxSSF(t *testing.T) {
+func TestSaslOption_WithSecurityFlags(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithMaxSSF(256))
+	d := dummySaslCommonExt{}
+	o := WithSecurityFlags(SecMutualAuth)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal(SSF(256), client.securityProperties.MaxSSF)
+	a.Equal(SecMutualAuth, d.securityProperties.SecFlags)
 }
 
-func TestNewSaslClient_WithSecurityFlags(t *testing.T) {
+func TestSaslOption_WithMaxBufSize(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithSecurityFlags(SecMutualAuth))
+	d := dummySaslCommonExt{}
+	o := WithMaxBufSize(32768)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal(SecMutualAuth, client.securityProperties.SecFlags)
+	a.Equal(uint32(32768), d.securityProperties.MaxBufSize)
 }
 
-func TestNewSaslClient_WithMaxBufSize(t *testing.T) {
+func TestSaslOption_WithExternalSSF(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithMaxBufSize(32768))
+	d := dummySaslCommonExt{}
+	o := WithExternalSSF(64)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal(uint32(32768), client.securityProperties.MaxBufSize)
+	a.Equal(SSF(64), d.externalProperties.SSF)
 }
 
-func TestNewSaslClient_WithExternalSSF(t *testing.T) {
+func TestSaslOption_WithExternalAuthID(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithExternalSSF(64))
+	d := dummySaslCommonExt{}
+	o := WithExternalAuthID("user@example.com")
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal(SSF(64), client.externalProperties.SSF)
+	a.Equal("user@example.com", d.externalProperties.AuthID)
 }
 
-func TestNewSaslClient_WithExternalAuthID(t *testing.T) {
+func TestSaslOption_WithNeedHTTP(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
-	client, err := NewSaslClient("imap", WithExternalAuthID("user@example.com"))
+	d := dummySaslCommonExt{}
+	o := WithNeedHTTP()
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.Equal("user@example.com", client.externalProperties.AuthID)
+	a.True(d.needHTTP)
 }
 
-func TestNewSaslClient_WithNeedHTTP(t *testing.T) {
+func TestSaslOption_WithChannelBindings(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
-
-	client, err := NewSaslClient("imap", WithNeedHTTP())
-	a.NoErrorFatal(err)
-	a.True(client.needHTTP)
-}
-
-func TestNewSaslClient_WithChannelBindings(t *testing.T) {
-	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "TEST"})
 
 	cb := ChannelBinding{
 		Name:     "tls-server-end-point",
 		Critical: true,
 		Data:     []byte{0x01, 0x02, 0x03, 0x04},
 	}
-	client, err := NewSaslClient("imap", WithChannelBindings(cb))
+	d := dummySaslCommonExt{}
+	o := WithChannelBindings(cb)
+	err := o(&d)
 	a.NoErrorFatal(err)
-	a.NotNil(client.channelBinding)
-	a.Equal("tls-server-end-point", client.channelBinding.Name)
-	a.True(client.channelBinding.Critical)
-	a.Equal([]byte{0x01, 0x02, 0x03, 0x04}, client.channelBinding.Data)
+	a.NotNil(d.channelBinding)
+	a.Equal("tls-server-end-point", d.channelBinding.Name)
+	a.True(d.channelBinding.Critical)
+	a.Equal([]byte{0x01, 0x02, 0x03, 0x04}, d.channelBinding.Data)
 }
 
-func TestNewSaslClient_MultipleOptions(t *testing.T) {
+func TestSaslOption_MultipleOptions(t *testing.T) {
 	a := NewAssert(t)
-	t.Cleanup(func() { resetRegistry() })
-	RegisterMech(MechInfo{Name: "VALID"})
 
 	loggers := NewTestLoggers(t)
-	client, err := NewSaslClient("smtp",
+	d := dummySaslCommonExt{}
+	opts := []SaslOption{
 		WithLoggers(loggers),
 		WithServerFQDN("mail.example.com"),
 		WithMinSSF(128),
 		WithMaxSSF(256),
-	)
-	a.NoErrorFatal(err)
-	a.Equal("smtp", client.service)
-	a.Equal("mail.example.com", client.serverFQDN)
-	a.Equal(loggers, client.loggers)
-	a.Equal(SSF(128), client.securityProperties.MinSSF)
-	a.Equal(SSF(256), client.securityProperties.MaxSSF)
+	}
+	for _, o := range opts {
+		err := o(&d)
+		a.NoErrorFatal(err)
+	}
+	a.Equal("mail.example.com", d.serverFQDN)
+	a.Equal(loggers, d.loggers)
+	a.Equal(SSF(128), d.securityProperties.MinSSF)
+	a.Equal(SSF(256), d.securityProperties.MaxSSF)
 }
 
-func TestNewSaslClient_OptionError(t *testing.T) {
+func TestSaslOption_WithAuthnIDFunc(t *testing.T) {
 	a := NewAssert(t)
-	// Test that an option that returns an error causes NewSaslClient to fail
-	_, err := NewSaslClient("imap", WithServerFQDN("invalid-.hostname"))
+
+	called := false
+	testValue := "test-authn-id"
+	f := func(authData AuthDataSimple) (string, error) {
+		called = true
+		return testValue, nil
+	}
+
+	d := dummySaslCommonExt{}
+	o := WithAuthnIDFunc(f)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.AuthnIDCallback)
+
+	result, err := d.callbacks.AuthnIDCallback(AuthDataSimple{Prompt: "Enter authn ID"})
+	a.NoError(err)
+	a.True(called)
+	a.Equal(testValue, result)
+}
+
+func TestSaslOption_WithAuthzIDFunc(t *testing.T) {
+	a := NewAssert(t)
+
+	called := false
+	testValue := "test-authz-id"
+	f := func(authData AuthDataSimple) (string, error) {
+		called = true
+		return testValue, nil
+	}
+
+	d := dummySaslCommonExt{}
+	o := WithAuthzIDFunc(f)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.AuthzIDCallback)
+
+	result, err := d.callbacks.AuthzIDCallback(AuthDataSimple{Prompt: "Enter authz ID"})
+	a.NoError(err)
+	a.True(called)
+	a.Equal(testValue, result)
+}
+
+func TestSaslOption_WithPasswordFunc(t *testing.T) {
+	a := NewAssert(t)
+
+	called := false
+	testValue := "test-password"
+	f := func(authData AuthDataPassword) (string, error) {
+		called = true
+		return testValue, nil
+	}
+
+	d := dummySaslCommonExt{}
+	o := WithPasswordFunc(f)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.PasswordCallback)
+
+	result, err := d.callbacks.PasswordCallback(AuthDataPassword{Prompt: "Enter password"})
+	a.NoError(err)
+	a.True(called)
+	a.Equal(testValue, result)
+}
+
+func TestSaslOption_WithChallengeFunc(t *testing.T) {
+	a := NewAssert(t)
+
+	called := false
+	testValue := "test-response"
+	f := func(authData AuthDataChallenge) (string, error) {
+		called = true
+		return testValue, nil
+	}
+
+	d := dummySaslCommonExt{}
+	o := WithChallengeFunc(f)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.ChallengeCallback)
+
+	result, err := d.callbacks.ChallengeCallback(AuthDataChallenge{
+		Prompt:        "Enter response",
+		Challenge:     "challenge123",
+		DefaultResult: "default",
+		EchoPrompt:    EchoPrompt,
+	})
+	a.NoError(err)
+	a.True(called)
+	a.Equal(testValue, result)
+}
+
+func TestSaslOption_WithRealmFunc(t *testing.T) {
+	a := NewAssert(t)
+
+	called := false
+	testValue := "test-realm"
+	f := func(authData AuthDataRealm) (string, error) {
+		called = true
+		return testValue, nil
+	}
+
+	d := dummySaslCommonExt{}
+	o := WithRealmFunc(f)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.RealmCallback)
+
+	result, err := d.callbacks.RealmCallback(AuthDataRealm{
+		AvailableRealms: []string{"realm1", "realm2"},
+	})
+	a.NoError(err)
+	a.True(called)
+	a.Equal(testValue, result)
+}
+
+func TestSaslOption_WithAuthnID(t *testing.T) {
+	a := NewAssert(t)
+
+	authnID := "user@example.com"
+	d := dummySaslCommonExt{}
+	o := WithAuthnID(authnID)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.AuthnIDCallback)
+
+	result, err := d.callbacks.AuthnIDCallback(AuthDataSimple{Prompt: "Enter authn ID"})
+	a.NoError(err)
+	a.Equal(authnID, result)
+}
+
+func TestSaslOption_WithAuthzID(t *testing.T) {
+	a := NewAssert(t)
+
+	authzID := "admin@example.com"
+	d := dummySaslCommonExt{}
+	o := WithAuthzID(authzID)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.AuthzIDCallback)
+
+	result, err := d.callbacks.AuthzIDCallback(AuthDataSimple{Prompt: "Enter authz ID"})
+	a.NoError(err)
+	a.Equal(authzID, result)
+}
+
+func TestSaslOption_WithPassword(t *testing.T) {
+	a := NewAssert(t)
+
+	password := "secret123"
+	d := dummySaslCommonExt{}
+	o := WithPassword(password)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.PasswordCallback)
+
+	result, err := d.callbacks.PasswordCallback(AuthDataPassword{Prompt: "Enter password"})
+	a.NoError(err)
+	a.Equal(password, result)
+}
+
+func TestSaslOption_WithChallenge(t *testing.T) {
+	a := NewAssert(t)
+
+	response := "response123"
+	d := dummySaslCommonExt{}
+	o := WithChallenge(response)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.ChallengeCallback)
+
+	result, err := d.callbacks.ChallengeCallback(AuthDataChallenge{
+		Prompt:        "Enter response",
+		Challenge:     "challenge123",
+		DefaultResult: "default",
+		EchoPrompt:    EchoPrompt,
+	})
+	a.NoError(err)
+	a.Equal(response, result)
+}
+
+func TestSaslOption_WithRealm(t *testing.T) {
+	a := NewAssert(t)
+
+	realm := "example.com"
+	d := dummySaslCommonExt{}
+	o := WithRealm(realm)
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.RealmCallback)
+
+	result, err := d.callbacks.RealmCallback(AuthDataRealm{
+		AvailableRealms: []string{"realm1", "realm2"},
+	})
+	a.NoError(err)
+	a.Equal(realm, result)
+}
+
+func TestSaslOption_WithAuthIDInteractive(t *testing.T) {
+	a := NewAssert(t)
+
+	d := dummySaslCommonExt{}
+	o := WithAuthIDInteractive()
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.AuthnIDCallback)
+
+	result, err := d.callbacks.AuthnIDCallback(AuthDataSimple{Prompt: "Enter authn ID"})
 	a.Error(err)
+	a.Equal(ErrInteractionRequired, err)
+	a.Equal("", result)
+}
+
+func TestSaslOption_WithAuthzIDInteractive(t *testing.T) {
+	a := NewAssert(t)
+
+	d := dummySaslCommonExt{}
+	o := WithAuthzIDInteractive()
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.AuthzIDCallback)
+
+	result, err := d.callbacks.AuthzIDCallback(AuthDataSimple{Prompt: "Enter authz ID"})
+	a.Error(err)
+	a.Equal(ErrInteractionRequired, err)
+	a.Equal("", result)
+}
+
+func TestSaslOption_WithPasswordInteractive(t *testing.T) {
+	a := NewAssert(t)
+
+	d := dummySaslCommonExt{}
+	o := WithPasswordInteractive()
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.PasswordCallback)
+
+	result, err := d.callbacks.PasswordCallback(AuthDataPassword{Prompt: "Enter password"})
+	a.Error(err)
+	a.Equal(ErrInteractionRequired, err)
+	a.Equal("", result)
+}
+
+func TestSaslOption_WithChallengeInteractive(t *testing.T) {
+	a := NewAssert(t)
+
+	d := dummySaslCommonExt{}
+	o := WithChallengeInteractive()
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.ChallengeCallback)
+
+	result, err := d.callbacks.ChallengeCallback(AuthDataChallenge{
+		Prompt:        "Enter response",
+		Challenge:     "challenge123",
+		DefaultResult: "default",
+		EchoPrompt:    EchoPrompt,
+	})
+	a.Error(err)
+	a.Equal(ErrInteractionRequired, err)
+	a.Equal("", result)
+}
+
+func TestSaslOption_WithRealmInteractive(t *testing.T) {
+	a := NewAssert(t)
+
+	d := dummySaslCommonExt{}
+	o := WithRealmInteractive()
+	err := o(&d)
+	a.NoErrorFatal(err)
+	a.NotNil(d.callbacks.RealmCallback)
+
+	result, err := d.callbacks.RealmCallback(AuthDataRealm{
+		AvailableRealms: []string{"realm1", "realm2"},
+	})
+	a.Error(err)
+	a.Equal(ErrInteractionRequired, err)
+	a.Equal("", result)
 }

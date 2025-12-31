@@ -31,9 +31,9 @@ func NewAssert(t *testing.T) *myassert {
 }
 
 func resetRegistry() {
-	registry.Lock()
-	defer registry.Unlock()
-	registry.mechs = nil
+	mechRegistry.Lock()
+	defer mechRegistry.Unlock()
+	mechRegistry.mechs = nil
 }
 
 // testLogger wraps testing.T to implement the Logger interface

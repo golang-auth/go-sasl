@@ -429,3 +429,15 @@ func TestOrderMechs(t *testing.T) {
 		})
 	}
 }
+
+func TestSaslClient_InteractionRequired(t *testing.T) {
+	a := NewAssert(t)
+
+	x := mkInteractionSimpleCallback()
+	y := WithAuthzIDFunc(x)
+
+	client, err := NewSaslClient("imap", y)
+	a.NoErrorFatal(err)
+	a.NotNil(client)
+
+}

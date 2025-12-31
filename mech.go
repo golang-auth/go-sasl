@@ -11,7 +11,7 @@ import (
 
 var ErrMechNotFound = errors.New("mechsniam not found")
 
-var registry struct {
+var mechRegistry struct {
 	sync.RWMutex
 	mechs []MechInfo
 }
@@ -59,12 +59,12 @@ func RegisterMech(newMech MechInfo) {
 		panic("Bad mech name: " + newMech.Name)
 	}
 
-	registry.Lock()
-	defer registry.Unlock()
+	mechRegistry.Lock()
+	defer mechRegistry.Unlock()
 
 	// insert the new mech, sorted by relative strength (strongest first)
-	insertIndex := len(registry.mechs)
-	for i, mech := range registry.mechs {
+	insertIndex := len(mechRegistry.mechs)
+	for i, mech := range mechRegistry.mechs {
 		if mechCompare(mech, newMech) > 0 {
 			// mech is stronger than newMech, so newMech goes after mech
 			insertIndex = i + 1
@@ -75,12 +75,12 @@ func RegisterMech(newMech MechInfo) {
 		}
 	}
 
-	registry.mechs = slices.Insert(registry.mechs, insertIndex, newMech)
+	mechRegistry.mechs = slices.Insert(mechRegistry.mechs, insertIndex, newMech)
 }
 
 func newMech(name string, config MechConfig) (p Mech, err error) {
-	registry.RLock()
-	defer registry.RUnlock()
+	mechRegistry.RLock()
+	defer mechRegistry.RUnlock()
 
 	mi, err := GetMechInfo(name)
 	if err != nil {
@@ -91,10 +91,10 @@ func newMech(name string, config MechConfig) (p Mech, err error) {
 }
 
 func GetMechInfo(name string) (info *MechInfo, err error) {
-	registry.RLock()
-	defer registry.RUnlock()
+	mechRegistry.RLock()
+	defer mechRegistry.RUnlock()
 
-	for _, info := range registry.mechs {
+	for _, info := range mechRegistry.mechs {
 		if info.Name == name {
 			return &info, nil
 		}
@@ -106,8 +106,8 @@ func GetMechInfo(name string) (info *MechInfo, err error) {
 // HasMech can be used to find out whether a named
 // mechanism is registered or not
 func HasMech(name string) bool {
-	registry.RLock()
-	defer registry.RUnlock()
+	mechRegistry.RLock()
+	defer mechRegistry.RUnlock()
 
 	_, err := GetMechInfo(name)
 	if err != nil {
@@ -118,11 +118,11 @@ func HasMech(name string) bool {
 }
 
 func RegisteredMechs() []string {
-	registry.RLock()
-	defer registry.RUnlock()
+	mechRegistry.RLock()
+	defer mechRegistry.RUnlock()
 
-	mechs := make([]string, len(registry.mechs))
-	for i, mi := range registry.mechs {
+	mechs := make([]string, len(mechRegistry.mechs))
+	for i, mi := range mechRegistry.mechs {
 		mechs[i] = mi.Name
 	}
 
@@ -138,6 +138,15 @@ type MechConfig struct {
 	ExternalProperties ExternalProperties
 	SecProps           SecurityFlag
 	CBDisposition      channelBindingDisposition
+	Callbacks          Callbacks
+}
+
+type Callbacks struct {
+	AuthnIDCallback   SaslSimpleCallback
+	AuthzIDCallback   SaslSimpleCallback
+	PasswordCallback  SaslPasswordCallback
+	ChallengeCallback SaslChallengeCallback
+	RealmCallback     SaslRealmCallback
 }
 
 type Mech interface {

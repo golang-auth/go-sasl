@@ -42,10 +42,7 @@ func TestFeatureList_UnknownBitIncluded(t *testing.T) {
 }
 
 func TestFeature_String_Zero(t *testing.T) {
-	// Zero value should stringify to some clear "empty" indication. Keep this
-	// intentionally loose to avoid coupling tests to exact wording/typos.
-	assert.Contains(t, Feature(0).String(), "no")
-	assert.Contains(t, Feature(0).String(), "features")
+	assert.Contains(t, Feature(0).String(), "no security features")
 }
 
 func TestFeature_String_KnownFeatures_NonEmptyAndUnique(t *testing.T) {

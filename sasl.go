@@ -8,38 +8,6 @@ import (
 	"strings"
 )
 
-func (c *SaslClient) applyPrompt(prompt Prompt) error {
-	if prompt.result == "" {
-		return nil
-	}
-
-	switch prompt.DataType {
-	default:
-		return fmt.Errorf("unknown prompt type: %d", prompt.DataType)
-	case PromptDataTypeAuthnID:
-		c.authnIDCallback = mkStaticSimpleCallback(prompt.result)
-	case PromptDataTypeAuthzID:
-		c.authzIDCallback = mkStaticSimpleCallback(prompt.result)
-	case PromptDataTypePassword:
-		c.passwordCallback = mkStaticPasswordCallback(prompt.result)
-	case PromptDataTypeChallenge:
-		c.challengeCallback = mkStaticChallengeCallback(prompt.result)
-	case PromptDataTypeRealm:
-		c.realmCallback = mkStaticRealmCallback(prompt.result)
-	}
-
-	return nil
-}
-
-func (c *SaslClient) ApplyPrompts(prompts []Prompt) error {
-	for _, prompt := range prompts {
-		if err := c.applyPrompt(prompt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func systemAuthnID(_ AuthDataSimple) (string, error) {
 	user, err := user.Current()
 	if err != nil {
@@ -59,69 +27,10 @@ type SaslClient struct {
 
 	// mech is expected to fill this in
 	UserInfo UserInfo
-
-	authnIDCallback   SaslSimpleCallback
-	authzIDCallback   SaslSimpleCallback
-	passwordCallback  SaslPasswordCallback
-	challengeCallback SaslChallengeCallback
-	realmCallback     SaslRealmCallback
 }
 
-type SaslClientOption func(*SaslClient) error
-
-func WithAuthnIDFunc(f SaslSimpleCallback) SaslClientOption {
-	return func(c *SaslClient) error {
-		c.authnIDCallback = f
-		return nil
-	}
-}
-
-func WithAuthzIDFunc(f SaslSimpleCallback) SaslClientOption {
-	return func(c *SaslClient) error {
-		c.authzIDCallback = f
-		return nil
-	}
-}
-
-func WithPasswordFunc(f SaslPasswordCallback) SaslClientOption {
-	return func(c *SaslClient) error {
-		c.passwordCallback = f
-		return nil
-	}
-}
-
-func WithChallengeFunc(f SaslChallengeCallback) SaslClientOption {
-	return func(c *SaslClient) error {
-		c.challengeCallback = f
-		return nil
-	}
-}
-
-func WithRealmFunc(f SaslRealmCallback) SaslClientOption {
-	return func(c *SaslClient) error {
-		c.realmCallback = f
-		return nil
-	}
-}
-
-func WithAuthnID(authnID string) SaslClientOption {
-	return WithAuthnIDFunc(mkStaticSimpleCallback(authnID))
-}
-
-func WithAuthzID(authzID string) SaslClientOption {
-	return WithAuthzIDFunc(mkStaticSimpleCallback(authzID))
-}
-
-func WithPassword(password string) SaslClientOption {
-	return WithPasswordFunc(mkStaticPasswordCallback(password))
-}
-
-func WithChallenge(challenge string) SaslClientOption {
-	return WithChallengeFunc(mkStaticChallengeCallback(challenge))
-}
-
-func WithRealm(realm string) SaslClientOption {
-	return WithRealmFunc(mkStaticRealmCallback(realm))
+func (c *SaslClient) getCommon() *saslCommon {
+	return &c.saslCommon
 }
 
 func NewSaslClient(service string, opts ...SaslOption) (client SaslClient, err error) {
@@ -132,12 +41,14 @@ func NewSaslClient(service string, opts ...SaslOption) (client SaslClient, err e
 				MaxSSF:     ^SSF(0),
 				MaxBufSize: 65536,
 			},
+			callbacks: Callbacks{
+				AuthnIDCallback: systemAuthnID,
+			},
 		},
-		authnIDCallback: systemAuthnID,
 	}
 
 	for _, o := range opts {
-		if err = o(&client.saslCommon); err != nil {
+		if err = o(&client); err != nil {
 			return
 		}
 	}
@@ -271,6 +182,7 @@ func (c *SaslClient) Start(serverMechs []string) (outToken []byte, err error) {
 		ExternalProperties: c.externalProperties,
 		SecProps:           c.securityProperties.SecFlags,
 		CBDisposition:      cbDisposition,
+		Callbacks:          c.callbacks,
 	}
 
 	c.mech, err = newMech(bestMech, cfg)
@@ -441,6 +353,38 @@ func (c *SaslClient) channelBindingDisposition(doingNegotiation bool, serverCanC
 	}
 
 	return disp, nil
+}
+
+func (c *SaslClient) applyPrompt(prompt Prompt) error {
+	if prompt.result == "" {
+		return nil
+	}
+
+	switch prompt.DataType {
+	default:
+		return fmt.Errorf("unknown prompt type: %d", prompt.DataType)
+	case PromptDataTypeAuthnID:
+		c.callbacks.AuthnIDCallback = mkStaticSimpleCallback(prompt.result)
+	case PromptDataTypeAuthzID:
+		c.callbacks.AuthzIDCallback = mkStaticSimpleCallback(prompt.result)
+	case PromptDataTypePassword:
+		c.callbacks.PasswordCallback = mkStaticPasswordCallback(prompt.result)
+	case PromptDataTypeChallenge:
+		c.callbacks.ChallengeCallback = mkStaticChallengeCallback(prompt.result)
+	case PromptDataTypeRealm:
+		c.callbacks.RealmCallback = mkStaticRealmCallback(prompt.result)
+	}
+
+	return nil
+}
+
+func (c *SaslClient) ApplyPrompts(prompts []Prompt) error {
+	for _, prompt := range prompts {
+		if err := c.applyPrompt(prompt); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // find all the server mechs that are compatible with the client mechs
