@@ -27,6 +27,9 @@ func (m dummyMech) Step(inToken []byte) (outToken []byte, err error) {
 	return nil, nil
 }
 
+func (m dummyMech) Dispose() {
+}
+
 // func (m dummyMech) ContextParams() common.ContextParams {
 // 	return common.ContextParams{}
 // }

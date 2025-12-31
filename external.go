@@ -28,6 +28,9 @@ func (m *externalMech) Name() string {
 	return "EXTERNAL"
 }
 
+func (m *externalMech) Dispose() {
+}
+
 func (m *externalMech) IsEstablished() bool {
 	return m.isEstablished
 }
@@ -44,6 +47,7 @@ func (m *externalMech) Step(inToken []byte) (outToken []byte, err error) {
 	}
 
 	interact := false
+	outToken = []byte("")
 
 	// the authz is optional.  If we have a callback to find it then use it.
 	if m.config.Callbacks.AuthzIDCallback != nil {
@@ -52,7 +56,6 @@ func (m *externalMech) Step(inToken []byte) (outToken []byte, err error) {
 		default:
 			return nil, err
 		case nil:
-			// callback might decline to provide an authz ID
 			if authzID != "" {
 				outToken = []byte(authzID)
 			}

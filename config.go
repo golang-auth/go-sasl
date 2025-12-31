@@ -6,13 +6,82 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 )
 
+// AppName is the name of the application and is used to locate an
+// optional configuration file for the app.  Eg. "imapd".
+//
+// Top level application code should set this if it wants the library
+// to load a Cyrus SASL compatible config file.
+//
+// The [SetConfigValue] function can be used to augment or override values
+// read from the config file or instead of loading a config file.
 var AppName string
+
+type kv map[string]string
+
+var config struct {
+	once sync.Once
+	mu   sync.RWMutex
+	kv   kv
+}
+
+var (
+	// ErrConifgParse denotes an issue parsing application config file
+	ErrConfigParse = errors.New("config parse error")
+
+	// Match key (alphanumeric, dash, underscore) followed by colon -- then an optional value
+	// which is any set of characters preceeded by and/or followed by optional ignored whitespace
+	configLineRE = regexp.MustCompile(`^([a-zA-Z0-9_-]+):(?:\s*(.*?)\s*)?$`)
+)
+
+// GetConfigValue retrieves the value of a configuration key, from the config file
+// or supplied by the application via [SetConfigValue]
+func GetConfigValue(key string) (string, bool) {
+	if err := initConfig(); err != nil {
+		log.Printf("error initializing config: %s", err)
+		return "", false
+	}
+	config.mu.RLock()
+	defer config.mu.RUnlock()
+
+	value, ok := config.kv[key]
+	return value, ok
+}
+
+// SetConfigValue sets the value of a configuration key for the application
+// to use in subsequent calls to [GetConfigValue].  Overrides any value read
+// from the optional config file
+func SetConfigValue(key, value string) {
+	if err := initConfig(); err != nil {
+		log.Printf("error initializing config: %s", err)
+	}
+	config.mu.Lock()
+	defer config.mu.Unlock()
+	config.kv[key] = value
+}
+
+// load an app specific config file once per application execution,
+// if the app name is set and a config file can be found for it
+func initConfig() error {
+	var err error
+	config.once.Do(func() {
+		config.mu.Lock()
+		defer config.mu.Unlock()
+		config.kv, err = loadConfigFile(AppName)
+		if config.kv == nil {
+			config.kv = make(kv)
+		}
+	})
+
+	return err
+}
 
 func findConfigFile(appname string) string {
 	paths, err := getConfigPath()
@@ -28,30 +97,19 @@ func findConfigFile(appname string) string {
 	return ""
 }
 
-type config struct {
-	kv map[string]string
-}
+func loadConfigFile(appname string) (kv, error) {
+	kv := make(kv)
 
-var (
-	ErrConfigParse = errors.New("config parse error")
-	// Match key (alphanumeric, dash, underscore) followed by colon -- then an optional value
-	// which is any set of characters followed by optional whitespac
-	configLineRE = regexp.MustCompile(`^([a-zA-Z0-9_-]+):(?:\s*(.*?)\s*)?$`)
-)
-
-func loadConfigFile(appname string) (*config, error) {
-	config := &config{
-		kv: make(map[string]string),
-	}
+	// treat missing config file as an empty config
 	configPath := findConfigFile(appname)
 	if configPath == "" {
-		return config, nil
+		return kv, nil
 	}
 
 	infile, err := os.Open(configPath)
 	if err != nil {
-		// If file can't be opened, return config with no error (equivalent to SASL_CONTINUE)
-		return config, nil
+		log.Printf("error opening config file %s: %s", configPath, err)
+		return kv, nil
 	}
 	defer infile.Close()
 
@@ -88,12 +146,12 @@ func loadConfigFile(appname string) (*config, error) {
 		}
 
 		// Store the key-value pair
-		config.kv[key] = value
+		kv[key] = value
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
-	return config, nil
+	return kv, nil
 }

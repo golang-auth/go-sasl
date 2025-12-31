@@ -103,6 +103,17 @@ func GetMechInfo(name string) (info *MechInfo, err error) {
 	return nil, ErrMechNotFound
 }
 
+func Mechs() []MechInfo {
+	mechRegistry.RLock()
+	defer mechRegistry.RUnlock()
+
+	// make a copy of the mech info list
+	mechs := make([]MechInfo, len(mechRegistry.mechs))
+	copy(mechs, mechRegistry.mechs)
+
+	return mechs
+}
+
 // HasMech can be used to find out whether a named
 // mechanism is registered or not
 func HasMech(name string) bool {
@@ -153,6 +164,7 @@ type Mech interface {
 	Name() string
 	IsEstablished() bool
 	Step(inToken []byte) (outToken []byte, err error)
+	Dispose()
 	// ContextParams() ContextParams
 	// Encode(input []byte) (outToken []byte, err error)
 	// Decode(inputToken []byte) (output []byte, err error)

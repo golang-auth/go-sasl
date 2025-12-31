@@ -34,6 +34,11 @@ func (c *SaslClient) getCommon() *saslCommon {
 }
 
 func NewSaslClient(service string, opts ...SaslOption) (client SaslClient, err error) {
+	// initialize the config -- just once per app execution
+	if err := initConfig(); err != nil {
+		return client, err
+	}
+
 	client = SaslClient{
 		saslCommon: saslCommon{
 			service: service,
@@ -67,6 +72,12 @@ func NewSaslClient(service string, opts ...SaslOption) (client SaslClient, err e
 	}
 
 	return client, err
+}
+
+func (c *SaslClient) Dispose() {
+	if c.mech != nil {
+		c.mech.Dispose()
+	}
 }
 
 func (c SaslClient) IsEstablished() bool {
@@ -202,6 +213,14 @@ func (c *SaslClient) Start(serverMechs []string) (outToken []byte, err error) {
 
 	// otherwise execute the first step
 	return c.mech.Step(nil)
+}
+
+func (c *SaslClient) Mech() string {
+	if c.mech == nil {
+		return ""
+	}
+
+	return c.mech.Name()
 }
 
 func (c *SaslClient) Step(inToken []byte) (outToken []byte, err error) {
