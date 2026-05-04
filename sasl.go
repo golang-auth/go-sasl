@@ -23,6 +23,8 @@ type UserInfo struct {
 
 type SaslClient struct {
 	saslCommon
+	interaction Interaction
+
 	mech Mech
 
 	// mech is expected to fill this in
@@ -72,6 +74,18 @@ func NewSaslClient(service string, opts ...SaslOption) (client SaslClient, err e
 	}
 
 	return client, err
+}
+
+func WithInteraction(interaction Interaction) SaslOption {
+	return func(c saslCommonExt) error {
+		switch c := c.(type) {
+		default:
+			return fmt.Errorf("withInteraction not supported for %T", c)
+		case *SaslClient:
+			c.interaction = interaction
+			return nil
+		}
+	}
 }
 
 func (c *SaslClient) Dispose() {
@@ -193,7 +207,7 @@ func (c *SaslClient) Start(serverMechs []string) (outToken []byte, err error) {
 		ExternalProperties: c.externalProperties,
 		SecProps:           c.securityProperties.SecFlags,
 		CBDisposition:      cbDisposition,
-		Callbacks:          c.callbacks,
+		Callbacks:          &c.callbacks,
 	}
 
 	c.mech, err = newMech(bestMech, cfg)
@@ -212,7 +226,7 @@ func (c *SaslClient) Start(serverMechs []string) (outToken []byte, err error) {
 	}
 
 	// otherwise execute the first step
-	return c.mech.Step(nil)
+	return c.Step(nil)
 }
 
 func (c *SaslClient) Mech() string {
@@ -232,7 +246,22 @@ func (c *SaslClient) Step(inToken []byte) (outToken []byte, err error) {
 		return nil, ErrAlreadyEstablished
 	}
 
-	outToken, err = c.mech.Step(inToken)
+	var prompts []Prompt
+	for {
+		outToken, prompts, err = c.mech.Step(inToken)
+		if err != ErrInteractionRequired {
+			break
+		}
+		if c.interaction == nil {
+			return nil, ErrInteractionRequired
+		}
+		if err := c.interaction.Interact(prompts); err != nil {
+			return nil, err
+		}
+		if err := c.ApplyPrompts(prompts); err != nil {
+			return nil, err
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +404,7 @@ func (c *SaslClient) channelBindingDisposition(doingNegotiation bool, serverCanC
 }
 
 func (c *SaslClient) applyPrompt(prompt Prompt) error {
-	if prompt.result == "" {
+	if prompt.result == nil {
 		return nil
 	}
 
@@ -383,15 +412,15 @@ func (c *SaslClient) applyPrompt(prompt Prompt) error {
 	default:
 		return fmt.Errorf("unknown prompt type: %d", prompt.DataType)
 	case PromptDataTypeAuthnID:
-		c.callbacks.AuthnIDCallback = mkStaticSimpleCallback(prompt.result)
+		c.callbacks.AuthnIDCallback = mkStaticSimpleCallback(*prompt.result)
 	case PromptDataTypeAuthzID:
-		c.callbacks.AuthzIDCallback = mkStaticSimpleCallback(prompt.result)
+		c.callbacks.AuthzIDCallback = mkStaticSimpleCallback(*prompt.result)
 	case PromptDataTypePassword:
-		c.callbacks.PasswordCallback = mkStaticPasswordCallback(prompt.result)
+		c.callbacks.PasswordCallback = mkStaticPasswordCallback(*prompt.result)
 	case PromptDataTypeChallenge:
-		c.callbacks.ChallengeCallback = mkStaticChallengeCallback(prompt.result)
+		c.callbacks.ChallengeCallback = mkStaticChallengeCallback(*prompt.result)
 	case PromptDataTypeRealm:
-		c.callbacks.RealmCallback = mkStaticRealmCallback(prompt.result)
+		c.callbacks.RealmCallback = mkStaticRealmCallback(*prompt.result)
 	}
 
 	return nil

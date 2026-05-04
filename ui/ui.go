@@ -3,6 +3,8 @@
 package ui
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/huh"
 
 	"github.com/golang-auth/go-sasl"
@@ -12,14 +14,31 @@ type UI struct {
 	prompts []sasl.Prompt
 }
 
-func NewUI(prompts []sasl.Prompt) *UI {
-	return &UI{
-		prompts: prompts,
-	}
+func NewUI() *UI {
+	return &UI{}
 }
 
-func (ui *UI) Interact() error {
-	results := make([]string, len(ui.prompts))
+// custom result type so that we can tell the difference betweeen
+// an empty result and one that was not filled in.
+type result struct {
+	value *string
+}
+
+func (r *result) Set(value string) {
+	r.value = new(string)
+	*r.value = value
+}
+
+func (r *result) Get() string {
+	if r.value == nil {
+		return ""
+	}
+	return *r.value
+}
+
+func (ui *UI) Interact(prompts []sasl.Prompt) error {
+	ui.prompts = prompts
+	results := make([]result, len(ui.prompts))
 
 	fields, err := ui.makeFields(results)
 	if err != nil {
@@ -43,10 +62,11 @@ func (ui *UI) Interact() error {
 	}
 
 	for i, result := range results {
-		if result == "" {
+		fmt.Printf("result[%d]: %+v\n", i, result)
+		if result.value == nil {
 			continue
 		}
-		err = ui.prompts[i].SetResult(result)
+		err = ui.prompts[i].SetResult(*result.value)
 		if err != nil {
 			return err
 		}
@@ -55,7 +75,7 @@ func (ui *UI) Interact() error {
 	return nil
 }
 
-func (ui *UI) makeFields(results []string) ([]huh.Field, error) {
+func (ui *UI) makeFields(results []result) ([]huh.Field, error) {
 	fields := make([]huh.Field, len(ui.prompts))
 
 	for i, prompt := range ui.prompts {
@@ -64,18 +84,18 @@ func (ui *UI) makeFields(results []string) ([]huh.Field, error) {
 			fields[i] = huh.NewInput().
 				Title("User ID").
 				Description("Your own user ID").
-				Value(&results[i]).
+				Accessor(&results[i]).
 				CharLimit(64)
 		case sasl.PromptDataTypeAuthzID:
 			fields[i] = huh.NewInput().
 				Title("Authorization user ID").
 				Description("The ID of the user to which you are authorizing\nLeave blank to use your own user ID").
-				Value(&results[i]).
+				Accessor(&results[i]).
 				CharLimit(64)
 		case sasl.PromptDataTypePassword:
 			fields[i] = huh.NewInput().
 				Title("Password").
-				Value(&results[i]).
+				Accessor(&results[i]).
 				EchoMode(huh.EchoModePassword).
 				CharLimit(64)
 		case sasl.PromptDataTypeChallenge:
@@ -88,7 +108,7 @@ func (ui *UI) makeFields(results []string) ([]huh.Field, error) {
 				Title("Server challenge").
 				Description(challenge.Challenge).
 				Placeholder(challenge.DefaultResult).
-				Value(&results[i]).
+				Accessor(&results[i]).
 				CharLimit(64)
 			switch challenge.EchoPrompt {
 			case sasl.NoEchoPrompt:
@@ -105,7 +125,7 @@ func (ui *UI) makeFields(results []string) ([]huh.Field, error) {
 			s := huh.NewSelect[string]().
 				Title("Realm").
 				Description("The realm to which you are authenticating").
-				Value(&results[i])
+				Accessor(&results[i])
 
 			opts := make([]huh.Option[string], len(realm.AvailableRealms))
 			for i, realm := range realm.AvailableRealms {

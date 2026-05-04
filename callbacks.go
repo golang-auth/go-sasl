@@ -58,7 +58,38 @@ type Interaction interface {
 type Prompt struct {
 	DataType PromptDataType
 	prompt   any
-	result   string
+	result   *string
+}
+
+func NewPrompt(data any) (*Prompt, error) {
+	var prompt Prompt
+
+	switch data := data.(type) {
+	default:
+		return nil, fmt.Errorf("unknown data type: %T", data)
+	case AuthDataSimple:
+		prompt = Prompt{
+			DataType: PromptDataTypeAuthzID,
+			prompt:   data,
+		}
+	case AuthDataPassword:
+		prompt = Prompt{
+			DataType: PromptDataTypePassword,
+			prompt:   data,
+		}
+	case AuthDataChallenge:
+		prompt = Prompt{
+			DataType: PromptDataTypeChallenge,
+			prompt:   data,
+		}
+	case AuthDataRealm:
+		prompt = Prompt{
+			DataType: PromptDataTypeRealm,
+			prompt:   data,
+		}
+	}
+
+	return &prompt, nil
 }
 
 func (n Prompt) GetAuthDataSimple() (*AuthDataSimple, error) {
@@ -110,7 +141,8 @@ func (n Prompt) GetAuthDataRealm() (*AuthDataRealm, error) {
 }
 
 func (n *Prompt) SetResult(result string) error {
-	n.result = result
+	n.result = new(string)
+	*n.result = result
 	return nil
 }
 

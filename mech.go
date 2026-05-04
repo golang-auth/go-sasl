@@ -149,7 +149,7 @@ type MechConfig struct {
 	ExternalProperties ExternalProperties
 	SecProps           SecurityFlag
 	CBDisposition      channelBindingDisposition
-	Callbacks          Callbacks
+	Callbacks          *Callbacks
 }
 
 type Callbacks struct {
@@ -163,7 +163,7 @@ type Callbacks struct {
 type Mech interface {
 	Name() string
 	IsEstablished() bool
-	Step(inToken []byte) (outToken []byte, err error)
+	Step(inToken []byte) (outToken []byte, prompts []Prompt, err error)
 	Dispose()
 	// ContextParams() ContextParams
 	// Encode(input []byte) (outToken []byte, err error)
